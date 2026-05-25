@@ -32,13 +32,18 @@ def test_process_record_valid_data():
     record = {"flight_id": "FL001", "price": 100}
     result = loader.process_record(record)
     assert result["flight_id"] == "FL001"
-    assert result["price_with_tax"] == 110.0
+    assert result["price_with_tax"] == pytest.approx(110.0)
 
 
 def test_process_record_invalid_data():
     record = {"flight_id": "FL002", "price": "invalid"}
     result = loader.process_record(record)
     assert result is None
+
+
+def test_save_results_raises_when_path_missing():
+    with pytest.raises(ValueError, match="Output path is required"):
+        loader.save_results([], "")
 
 
 @patch("src.ingestion.flight_data_loader.requests.get")
