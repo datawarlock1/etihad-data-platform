@@ -2,3 +2,4 @@ pyspark
 pytest
 pytest-cov
 requests
+databricks-connect==16.1.7
