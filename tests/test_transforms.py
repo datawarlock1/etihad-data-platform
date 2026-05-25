@@ -1,3 +1,7 @@
+import sys
+import os
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 from pyspark.sql import SparkSession
 from src.transformations.flight_transforms import filter_active, recent_days, add_ingested_at
 
