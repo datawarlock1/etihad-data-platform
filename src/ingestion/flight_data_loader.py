@@ -20,12 +20,12 @@ def get_api_url() -> str:
     return api_url.rstrip("/")
 
 
-def build_flight_endpoint(env: str) -> str:
+def build_flight_endpoint() -> str:
     return f"{get_api_url()}/flights"
 
 
 def load_flight_data(env: str, status: str) -> List[Dict[str, Any]]:
-    endpoint = build_flight_endpoint(env)
+    endpoint = build_flight_endpoint()
     response = requests.get(endpoint, params={"env": env, "status": status}, timeout=10)
     response.raise_for_status()
     return response.json()
@@ -59,4 +59,5 @@ def save_results(results: List[Dict[str, Any]], path: str) -> None:
 
 if __name__ == "__main__":
     example_results = ingest_flight_data("prod", "ACTIVE")
-    save_results(example_results, "/tmp/flight_results.json")
+    output_path = os.path.join(os.getcwd(), "flight_results.json")
+    save_results(example_results, output_path)
