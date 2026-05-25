@@ -1,138 +1,62 @@
 """
-Flight Data Loader - Intentionally flawed module for SonarCloud testing.
-Contains various code smells, security issues, and anti-patterns.
+Flight Data Loader.
+
+This module provides a secure and maintainable way to fetch flight data and
+process records. It avoids hardcoded secrets, side effects, and anti-patterns.
 """
 
-import os
-import subprocess
 import json
-from pyspark.sql import SparkSession
+import logging
+import os
+from typing import Any, Dict, List, Optional
 
-# 🔴 SECURITY ISSUE: Hardcoded credentials
-DB_USER = "admin"
-DB_PASSWORD = "SuperSecret123!@#"
-API_KEY = "sk-abc123xyz789"
+import requests
 
-# Global state (anti-pattern)
-_cache = {}
-_connection = None
+logger = logging.getLogger(__name__)
 
 
-def load_flight_data_insecure(env: str, query: str):
-    """
-    Load flight data with multiple security and quality issues.
-    """
-    # 🔴 SECURITY: SQL Injection vulnerability
-    sql_query = f"SELECT * FROM flights WHERE env = '{env}' AND status = '{query}'"
-    
-    # 🔴 SECURITY: Command injection
-    result = subprocess.run(f"curl -H 'Auth: {API_KEY}' https://api.example.com/flights?env={env}", shell=True)
-    
-    # 🟡 CODE SMELL: Magic numbers without explanation
-    max_retries = 3
-    timeout = 30
-    batch_size = 1000
-    chunk_multiplier = 5  # What does this mean?
-    
-    # 🟡 CODE SMELL: Duplicated code
-    if max_retries > 0:
-        max_retries = max_retries - 1
-    if max_retries > 0:
-        max_retries = max_retries - 1
-    
-    # 🟡 CODE SMELL: Unused variables
-    unused_config = {"key": "value"}
-    temp_list = []
-    legacy_format = "CSV"
-    old_path = "/data/old"
-    
-    # 🔴 BUG: Potential null dereference
-    data = None
-    try:
-        data = fetch_from_api(env)
-    except Exception:
-        pass
-    
-    # Using data without null check
-    for record in data:  # Could crash if data is None
-        process_record(record)
-    
-    # 🟡 CODE SMELL: Complex logic that could be refactored
-    if env == "prod":
-        if query == "all":
-            if batch_size > 0:
-                if chunk_multiplier > 1:
-                    if max_retries > 0:
-                        print("Processing...")
-    
-    return sql_query
-
-
-def process_record(record):
-    """Process a single record with poor error handling."""
-    # 🟡 CODE SMELL: Bare except clause
-    try:
-        value = record["flight_id"]
-        price = record["price"]
-        # Risky operations without proper error handling
-        calculated = price * 1.1
-    except:
-        pass  # Silently swallow errors
-
-
-def unused_helper():
-    """Function that is never called - dead code."""
-    return "This function serves no purpose"
-
-
-def another_dead_function():
-    """More dead code."""
-    legacy_data = {"status": "deprecated"}
-    return legacy_data
-
-
-def overly_complex_function(a, b, c, d, e, f, g):
-    """Function doing too many things (SRP violation)."""
-    # Validate inputs
-    if a is None or b is None:
-        raise ValueError("a and b required")
-    
-    # Transform data
-    result = a * b
-    result = result + c
-    result = result - d
-    
-    # Write to file
-    with open("/tmp/result.txt", "w") as f:
-        f.write(str(result))
-    
-    # Send to API
-    response = subprocess.call(f"curl -X POST http://localhost:8000/save -d {result}", shell=True)
-    
-    # Log to console
-    print(f"Processing complete: {result}")
-    
-    # Return multiple types of data
-    return {"result": result, "status": "ok", "timestamp": "2024-01-01"}
-
-
-def fetch_from_api(env: str):
-    """Fetch data from API - poor implementation."""
-    # 🔴 SECURITY: Using environment variable without validation
+def get_api_url() -> str:
     api_url = os.environ.get("API_URL", "http://localhost:8000")
-    
-    # 🟡 CODE SMELL: Using string concatenation for URLs
-    endpoint = api_url + "/flights?env=" + env
-    
-    # 🟡 CODE SMELL: No timeout specified
-    import requests
-    response = requests.get(endpoint)
-    
+    return api_url.rstrip("/")
+
+
+def build_flight_endpoint(env: str) -> str:
+    return f"{get_api_url()}/flights"
+
+
+def load_flight_data(env: str, status: str) -> List[Dict[str, Any]]:
+    endpoint = build_flight_endpoint(env)
+    response = requests.get(endpoint, params={"env": env, "status": status}, timeout=10)
+    response.raise_for_status()
     return response.json()
 
 
-# 🟡 CODE SMELL: Module-level code that should be in a function
+def process_record(record: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    try:
+        flight_id = record["flight_id"]
+        price = float(record["price"])
+        return {
+            "flight_id": flight_id,
+            "price_with_tax": price * 1.1,
+        }
+    except (KeyError, TypeError, ValueError) as exc:
+        logger.warning("Skipping invalid record: %s", exc)
+        return None
+
+
+def ingest_flight_data(env: str, status: str) -> List[Dict[str, Any]]:
+    records = load_flight_data(env, status)
+    processed_records = [result for record in records if (result := process_record(record)) is not None]
+    return processed_records
+
+
+def save_results(results: List[Dict[str, Any]], path: str) -> None:
+    if not path:
+        raise ValueError("Output path is required")
+    with open(path, "w", encoding="utf-8") as writer:
+        json.dump(results, writer, indent=2)
+
+
 if __name__ == "__main__":
-    # This should be in main() function
-    data = load_flight_data_insecure("prod", "SELECT * FROM flights")
-    print(data)
+    example_results = ingest_flight_data("prod", "ACTIVE")
+    save_results(example_results, "/tmp/flight_results.json")
